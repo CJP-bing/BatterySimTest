@@ -1,1 +1,269 @@
-<h1>hello wrld</h1>
+import React, { useState, useEffect } from 'react';
+
+const CellBalancingSimulation = () => {
+  const [cells, setCells] = useState([
+    { id: 1, voltage: 3.7, capacity: 100, discharge: 1.0 },
+    { id: 2, voltage: 3.7, capacity: 100, discharge: 1.05 },
+    { id: 3, voltage: 3.7, capacity: 100, discharge: 0.95 },
+    { id: 4, voltage: 3.7, capacity: 100, discharge: 1.1 }
+  ]);
+  const [cycles, setCycles] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isBalancing, setIsBalancing] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [autoBalance, setAutoBalance] = useState(false);
+  const maxVoltage = 4.2;
+  const minVoltage = 3.0;
+  const packVoltage = cells.reduce((sum, cell) => sum + cell.voltage, 0);
+  
+  // Animation frame control
+  useEffect(() => {
+    let interval;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setCells(prevCells => {
+          // Cycle cells and create imbalance
+          const newCells = prevCells.map(cell => {
+            let newVoltage = cell.voltage - (0.01 * cell.discharge);
+            if (newVoltage < minVoltage) newVoltage = minVoltage;
+            return { ...cell, voltage: newVoltage };
+          });
+          
+          // Apply cell balancing if enabled
+          if (isBalancing) {
+            const maxCell = Math.max(...newCells.map(c => c.voltage));
+            return newCells.map(cell => {
+              if (cell.voltage < maxCell && maxCell - cell.voltage > 0.05) {
+                // Slower balancing for more realistic simulation
+                return { ...cell, voltage: cell.voltage + 0.005 };
+              } else if (cell.voltage === maxCell && maxCell - Math.min(...newCells.map(c => c.voltage)) > 0.05) {
+                // Discharge higher voltage cells slightly
+                return { ...cell, voltage: cell.voltage - 0.003 };
+              }
+              return cell;
+            });
+          }
+          
+          return newCells;
+        });
+        
+        setCycles(prev => prev + 1);
+        
+        // Auto-enable balancing when imbalance is detected
+        if (autoBalance) {
+          const voltages = cells.map(c => c.voltage);
+          const imbalance = Math.max(...voltages) - Math.min(...voltages);
+          if (imbalance > 0.2 && !isBalancing) {
+            setIsBalancing(true);
+          } else if (imbalance < 0.05 && isBalancing) {
+            setIsBalancing(false);
+          }
+        }
+      }, 500 / speed);
+    }
+    
+    return () => clearInterval(interval);
+  }, [isRunning, isBalancing, cells, speed, autoBalance]);
+  
+  const chargeCells = () => {
+    setCells(prevCells => prevCells.map(cell => ({
+      ...cell,
+      voltage: Math.min(maxVoltage, cell.voltage + (Math.random() * 0.3) + 0.7)
+    })));
+  };
+  
+  const resetSimulation = () => {
+    setIsRunning(false);
+    setIsBalancing(false);
+    setCycles(0);
+    setCells([
+      { id: 1, voltage: 3.7, capacity: 100, discharge: 1.0 },
+      { id: 2, voltage: 3.7, capacity: 100, discharge: 1.05 },
+      { id: 3, voltage: 3.7, capacity: 100, discharge: 0.95 },
+      { id: 4, voltage: 3.7, capacity: 100, discharge: 1.1 }
+    ]);
+  };
+  
+  const increaseCellImbalance = () => {
+    setCells(prevCells => prevCells.map((cell, index) => {
+      if (index === 0) {
+        return { ...cell, voltage: Math.min(maxVoltage, cell.voltage + 0.3) };
+      } else if (index === 3) {
+        return { ...cell, voltage: Math.max(minVoltage, cell.voltage - 0.2) };
+      }
+      return cell;
+    }));
+  };
+
+  // Visual helpers
+  const getVoltageBarWidth = voltage => {
+    return ((voltage - minVoltage) / (maxVoltage - minVoltage)) * 100;
+  };
+  
+  const getVoltageColor = voltage => {
+    if (voltage >= 4.0) return 'bg-green-500';
+    if (voltage >= 3.6) return 'bg-green-400';
+    if (voltage >= 3.3) return 'bg-yellow-400';
+    if (voltage >= 3.1) return 'bg-orange-400';
+    return 'bg-red-500';
+  };
+  
+  const getCellImbalance = () => {
+    const voltages = cells.map(c => c.voltage);
+    return (Math.max(...voltages) - Math.min(...voltages)).toFixed(3);
+  };
+  
+  const getImbalanceStatus = () => {
+    const imbalance = getCellImbalance();
+    if (imbalance < 0.05) return 'Excellent';
+    if (imbalance < 0.1) return 'Good';
+    if (imbalance < 0.2) return 'Moderate';
+    if (imbalance < 0.3) return 'Poor';
+    return 'Critical';
+  };
+  
+  return (
+    <div className="p-4 bg-gray-100 rounded-lg">
+      <h2 className="text-xl font-bold mb-4">Battery Cell Balancing Simulation</h2>
+      
+      <div className="mb-6 p-4 bg-white rounded-lg shadow">
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-lg font-bold">Pack Status</div>
+          <div className="text-sm">Cycles: {cycles}</div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <div className="text-sm text-gray-600">Pack Voltage</div>
+            <div className="text-xl font-bold">{packVoltage.toFixed(2)}V</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-600">Cell Imbalance</div>
+            <div className="text-xl font-bold">{getCellImbalance()}V</div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-600">Balance Status</div>
+            <div className={`text-xl font-bold ${
+              getImbalanceStatus() === 'Excellent' ? 'text-green-600' :
+              getImbalanceStatus() === 'Good' ? 'text-green-500' :
+              getImbalanceStatus() === 'Moderate' ? 'text-yellow-500' :
+              getImbalanceStatus() === 'Poor' ? 'text-orange-500' : 'text-red-600'
+            }`}>
+              {getImbalanceStatus()}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-600">Balancing</div>
+            <div className={`text-xl font-bold ${isBalancing ? 'text-green-600' : 'text-gray-400'}`}>
+              {isBalancing ? 'Active' : 'Inactive'}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="mb-6 p-4 bg-white rounded-lg shadow">
+        <h3 className="font-bold mb-3">Individual Cell Status</h3>
+        
+        {cells.map(cell => (
+          <div key={cell.id} className="mb-3">
+            <div className="flex justify-between mb-1">
+              <div className="text-sm font-medium">Cell {cell.id}: {cell.voltage.toFixed(3)}V</div>
+              <div className="text-xs text-gray-600">
+                {cell.discharge > 1.05 ? 'High Discharge Rate' : 
+                 cell.discharge < 0.95 ? 'Low Discharge Rate' : 'Normal'}
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-4">
+              <div 
+                className={`h-4 rounded-full ${getVoltageColor(cell.voltage)}`} 
+                style={{ width: `${getVoltageBarWidth(cell.voltage)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="flex flex-col space-y-2">
+          <button 
+            onClick={() => setIsRunning(!isRunning)} 
+            className={`px-4 py-2 rounded-lg ${isRunning ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+          >
+            {isRunning ? 'Pause Simulation' : 'Start Simulation'}
+          </button>
+          
+          <button 
+            onClick={() => setIsBalancing(!isBalancing)}
+            className={`px-4 py-2 rounded-lg ${isBalancing ? 'bg-blue-700 text-white' : 'bg-blue-500 text-white'}`}
+            disabled={!isRunning}
+          >
+            {isBalancing ? 'Disable Balancing' : 'Enable Balancing'}
+          </button>
+        </div>
+        
+        <div className="flex flex-col space-y-2">
+          <button 
+            onClick={chargeCells}
+            className="px-4 py-2 bg-yellow-500 text-white rounded-lg"
+          >
+            Charge Cells
+          </button>
+          
+          <button
+            onClick={increaseCellImbalance}
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg"
+          >
+            Create Imbalance
+          </button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center">
+          <label className="mr-2 text-sm">Simulation Speed:</label>
+          <select 
+            value={speed} 
+            onChange={e => setSpeed(Number(e.target.value))}
+            className="bg-white border rounded p-1"
+          >
+            <option value={0.5}>0.5x</option>
+            <option value={1}>1x</option>
+            <option value={2}>2x</option>
+            <option value={4}>4x</option>
+          </select>
+        </div>
+        
+        <div className="flex items-center">
+          <label className="mr-2 text-sm">Auto-Balance:</label>
+          <input 
+            type="checkbox" 
+            checked={autoBalance} 
+            onChange={() => setAutoBalance(!autoBalance)}
+            className="h-4 w-4"
+          />
+        </div>
+      </div>
+      
+      <div className="mt-6">
+        <button 
+          onClick={resetSimulation}
+          className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg"
+        >
+          Reset Simulation
+        </button>
+      </div>
+      
+      <div className="mt-4 p-3 bg-blue-50 rounded text-sm text-gray-700">
+        <strong>Instructions:</strong>
+        <ul className="list-disc pl-5 mt-1">
+          <li>Start the simulation to see how cells discharge at different rates</li>
+          <li>Use "Create Imbalance" to artificially increase differences between cells</li>
+          <li>Enable balancing to see how the BMS equalizes cell voltages</li>
+          <li>Toggle Auto-Balance to simulate an intelligent BMS</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default CellBalancingSimulation;
